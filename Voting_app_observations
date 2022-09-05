@@ -1,0 +1,139 @@
+1. Deleting voting pod 
+	The voting web app was loading the page for aroung 20-30 seconds and after that it was working as usual.
+	The result app was showing the older results. For me I was stuck at option dog in voting app, but the
+	result app was showing cat 100%. A new voting app pod was created and the older one was terminating 
+	simultaneously.
+
+Cli Output:
+
+	[root@ip-172-31-8-246 ~]#
+	[root@ip-172-31-8-246 ~]# kubectl get pods
+	NAME                      READY   STATUS    RESTARTS   AGE
+	db-b54cd94f4-nkxtn        1/1     Running   0          3d
+	fortune                   2/2     Running   0          2d22h
+	mongodb                   1/1     Running   0          2d21h
+	redis-868d64d78-9dzmc     1/1     Running   0          3d21h
+	result-5d57b59f4b-kvxbc   1/1     Running   0          3d21h
+	vote-94849dc97-wlt5m      1/1     Running   0          3d
+	worker-dd46d7584-xbmrx    1/1     Running   1          3d
+	[root@ip-172-31-8-246 ~]#
+	[root@ip-172-31-8-246 ~]# kubectl delete pod vote-94849dc97-wlt5m
+	pod "vote-94849dc97-wlt5m" deleted
+	[root@ip-172-31-8-246 ~]#
+	[root@ip-172-31-8-246 ~]# kubectl get pods
+	NAME                      READY   STATUS    RESTARTS   AGE
+	db-b54cd94f4-nkxtn        1/1     Running   0          3d
+	fortune                   2/2     Running   0          2d22h
+	mongodb                   1/1     Running   0          2d21h
+	redis-868d64d78-9dzmc     1/1     Running   0          3d21h
+	result-5d57b59f4b-kvxbc   1/1     Running   0          3d21h
+	vote-94849dc97-pjtjs      1/1     Running   0          98s
+	worker-dd46d7584-xbmrx    1/1     Running   1          3d
+	[root@ip-172-31-8-246 ~]#
+	[root@ip-172-31-8-246 ~]#
+
+
+############################################################################################################
+
+2. Deleting worker pod
+	Doesn't affect anything. A new worker pod was created after a few seconds. Also all the log data of older 
+	worker pod is lost.
+
+
+Cli Output:
+
+	[root@ip-172-31-8-246 ~]# kubectl get pods
+	NAME                      READY   STATUS    RESTARTS   AGE
+	db-b54cd94f4-nkxtn        1/1     Running   0          3d
+	fortune                   2/2     Running   0          2d22h
+	mongodb                   1/1     Running   0          2d21h
+	redis-868d64d78-9dzmc     1/1     Running   0          3d21h
+	result-5d57b59f4b-kvxbc   1/1     Running   0          3d21h
+	vote-94849dc97-pjtjs      1/1     Running   0          4m48s
+	worker-dd46d7584-xbmrx    1/1     Running   1          3d
+	[root@ip-172-31-8-246 ~]#
+	[root@ip-172-31-8-246 ~]#
+	[root@ip-172-31-8-246 ~]# kubectl delete pod worker-dd46d7584-xbmrx
+	pod "worker-dd46d7584-xbmrx" deleted
+	[root@ip-172-31-8-246 ~]# kubectl get pods
+	NAME                      READY   STATUS    RESTARTS   AGE
+	db-b54cd94f4-nkxtn        1/1     Running   0          3d
+	fortune                   2/2     Running   0          2d22h
+	mongodb                   1/1     Running   0          2d21h
+	redis-868d64d78-9dzmc     1/1     Running   0          3d21h
+	result-5d57b59f4b-kvxbc   1/1     Running   0          3d21h
+	vote-94849dc97-pjtjs      1/1     Running   0          9m5s
+	worker-dd46d7584-bmdtf    1/1     Running   0          3m59s
+	[root@ip-172-31-8-246 ~]#
+
+##########################################################################################################
+
+3. Deleting DB pod
+	Deleting the DB pod results in a restart of the worker pod and creation of a new DB pod. But as soon as the new
+	DB pod is running the result app wan't working.
+
+Cli Output:
+
+	[root@ip-172-31-8-246 ~]#
+	[root@ip-172-31-8-246 ~]# kubectl get pods
+	NAME                      READY   STATUS    RESTARTS   AGE
+	db-b54cd94f4-nkxtn        1/1     Running   0          3d
+	fortune                   2/2     Running   0          2d22h
+	mongodb                   1/1     Running   0          2d21h
+	redis-868d64d78-9dzmc     1/1     Running   0          3d21h
+	result-5d57b59f4b-kvxbc   1/1     Running   0          3d21h
+	vote-94849dc97-pjtjs      1/1     Running   0          12m
+	worker-dd46d7584-bmdtf    1/1     Running   0          7m53s
+	[root@ip-172-31-8-246 ~]#
+	[root@ip-172-31-8-246 ~]# kubectl delete pod db-b54cd94f4-nkxtn
+	pod "db-b54cd94f4-nkxtn" deleted
+	[root@ip-172-31-8-246 ~]#
+	[root@ip-172-31-8-246 ~]# kubectl get pods
+	NAME                      READY   STATUS    RESTARTS   AGE
+	db-b54cd94f4-nps9w        1/1     Running   0          2m9s
+	fortune                   2/2     Running   0          2d22h
+	mongodb                   1/1     Running   0          2d21h
+	redis-868d64d78-9dzmc     1/1     Running   0          3d21h
+	result-5d57b59f4b-kvxbc   1/1     Running   0          3d21h
+	vote-94849dc97-pjtjs      1/1     Running   0          15m
+	worker-dd46d7584-bmdtf    1/1     Running   1          10m
+	[root@ip-172-31-8-246 ~]#
+
+#####################################################################################################################
+
+4. Making the result app work
+	The above(3) issue was due to a code in "result/server.js" file;
+	socket.on('subscribe', function (data) {
+		socket.join(data.channel);
+	});
+	This piece of code is making a physical connection with the DB. So, when we are deleting the DB pod this connection
+	is lost as the socket value is present no more. Deleting the result pod will solve this problem as a new physical
+	connection will be established between the new result pod and the DB pod.
+
+	After the restart is done the data stored in the older DB pod is lost. This is because Kubernetes isn't able to	maintain
+	statefull applications like Databases as good as it does for stateless applications.
+
+
+Cli Output:
+
+	[root@ip-172-31-8-246 ~]# kubectl get pods
+	NAME                      READY   STATUS    RESTARTS   AGE
+	db-b54cd94f4-nps9w        1/1     Running   0          4m12s
+	fortune                   2/2     Running   0          2d22h
+	mongodb                   1/1     Running   0          2d22h
+	redis-868d64d78-9dzmc     1/1     Running   0          3d21h
+	result-5d57b59f4b-kvxbc   1/1     Running   0          3d21h
+	vote-94849dc97-pjtjs      1/1     Running   0          17m
+	worker-dd46d7584-bmdtf    1/1     Running   1          12m
+	[root@ip-172-31-8-246 ~]# kubectl delete pod result-5d57b59f4b-kvxbc
+	pod "result-5d57b59f4b-kvxbc" deleted
+	[root@ip-172-31-8-246 ~]# kubectl get pods
+	NAME                      READY   STATUS    RESTARTS   AGE
+	db-b54cd94f4-nps9w        1/1     Running   0          6m13s
+	fortune                   2/2     Running   0          2d22h
+	mongodb                   1/1     Running   0          2d22h
+	redis-868d64d78-9dzmc     1/1     Running   0          3d21h
+	result-5d57b59f4b-hvrmh   1/1     Running   0          107s
+	vote-94849dc97-pjtjs      1/1     Running   0          19m
+	worker-dd46d7584-bmdtf    1/1     Running   1          14m
+	[root@ip-172-31-8-246 ~]#
